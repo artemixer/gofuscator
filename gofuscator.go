@@ -16,6 +16,7 @@ import (
 
 var names_dictionary map[string]string = make(map[string]string)
 var unicode_chars = []rune("аa")
+var outfile = "outfile.go"
 
 func main() {
 
@@ -30,22 +31,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Add import if it doesn't exist
-	file = AddImportToFile(filePath, "math")
+	// Replace all consts with var
+	ast.Inspect(file, func(n ast.Node) bool {
+		if genDecl, ok := n.(*ast.GenDecl); ok && genDecl.Tok == token.CONST {
+			genDecl.Tok = token.VAR
+		}
+		return true
+	})
 
+	writeToOutputFile(outfile, file, fset)
+	fset = token.NewFileSet()
+	file, err = parser.ParseFile(fset, outfile, nil, parser.ParseComments)
 
-	// Inspect the AST to find variable names
+	// Add "math" import if it doesn't exist
+	file = AddImportToFile(outfile, "math")
+
+	// Find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
 		if ident, ok := n.(*ast.Ident); ok {
 			// Check if it is a variable (not a type, function, etc.)
-			if ident.Obj != nil && ident.Obj.Kind == ast.Var && ident.Name != "_" {
-				//fmt.Println(ident.Name)
+			if ident.Obj != nil && (ident.Obj.Kind == ast.Var) && ident.Name != "_" {
 				ident.Name = obfuscateVariableName(ident.Name)
 			}
 		}
 		return true
 	})
 
+	// Write import paths to array
 	var importPaths []string
 	for _, decl := range file.Decls {
 		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.IMPORT {
@@ -60,11 +72,12 @@ func main() {
 		}
 	}
 
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
 			// Check if it is the old function name and declared in the current file
-			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == filePath {
+			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == outfile {
 				node.Name.Name = obfuscateFunctionName(node.Name.Name)
 			}
 
@@ -72,7 +85,7 @@ func main() {
 			// Check if it is a function call
 			if ident, ok := node.Fun.(*ast.Ident); ok {
 				// Check if it is the old function name and declared in the current file
-				if ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == filePath {
+				if ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == outfile {
 					ident.Name = obfuscateFunctionName(ident.Name)
 				}
 			}
@@ -94,48 +107,13 @@ func main() {
 		return true
 	})
 
-	debug(names_dictionary)
+	//debug(names_dictionary)
 
-	os.Remove("outfile.txt")
-	outputFile, err := os.Create("outfile.txt")
-	if err != nil {
-		fmt.Println("Error creating output file:", err)
-		os.Exit(1)
-	}
-	defer outputFile.Close()
+	writeToOutputFile("outfile.go", file, fset)
 
-	// Specify the encoding when writing to the file
-	err = printer.Fprint(outputFile, fset, file)
-	if err != nil {
-		fmt.Println("Error writing to output file:", err)
-		os.Exit(1)
-	}
 }
 
 
-func isInArray(target string, arr []string) bool {
-	for _, item := range arr {
-		if item == target {
-			return true
-		}
-	}
-	return false
-}
-
-func removeChar(input string, charToRemove byte) string {
-	result := ""
-	for i := 0; i < len(input); i++ {
-		if input[i] != charToRemove {
-			result += string(input[i])
-		}
-	}
-	return result
-}
-
-func debug(str interface{}) {
-	fmt.Printf("[?] ")
-	fmt.Println(str)
-}
 
 func obfuscateIntFloat(real_value float64) string {
 	var terms_array []string
@@ -308,6 +286,30 @@ func obfuscateFunctionName(real_value string) string {
 	return names_dictionary[real_value]
 }
 
+func isInArray(target string, arr []string) bool {
+	for _, item := range arr {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+func removeChar(input string, charToRemove byte) string {
+	result := ""
+	for i := 0; i < len(input); i++ {
+		if input[i] != charToRemove {
+			result += string(input[i])
+		}
+	}
+	return result
+}
+
+func debug(str interface{}) {
+	fmt.Printf("[?] ")
+	fmt.Println(str)
+}
+
 func hasImport(file *ast.File, importPath string) bool {
 	for _, imp := range file.Imports {
 		if imp.Path != nil && imp.Path.Value == fmt.Sprintf(`"%s"`, importPath) {
@@ -357,4 +359,20 @@ func valueExists(dict map[string]string, value string) bool {
         }
     }
     return false
+}
+
+func writeToOutputFile(file string, contents *ast.File, fset *token.FileSet) {
+	os.Remove(file)
+	outputFile, err := os.Create(file)
+	if err != nil {
+		fmt.Println("Error creating output file:", err)
+		os.Exit(1)
+	}
+	defer outputFile.Close()
+
+	err = printer.Fprint(outputFile, fset, contents)
+	if err != nil {
+		fmt.Println("Error writing to output file:", err)
+		os.Exit(1)
+	}
 }
