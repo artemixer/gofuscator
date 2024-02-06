@@ -92,8 +92,20 @@ func main() {
 		case *ast.BasicLit:
 			// Check if it is a string literal
 			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths){
-				node.Value = "\"" + "amogus_str" + "\""
+				node.Value = obfuscateString(node.Value)
 			}
+		}
+		return true
+	})
+
+	writeToOutputFile(outfile, file, fset)
+	fset = token.NewFileSet()
+	file, err = parser.ParseFile(fset, outfile, nil, parser.ParseComments)
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+
+		case *ast.BasicLit:
 			if node.Kind == token.INT {
 				integer_value, _ := strconv.Atoi(node.Value)
 				node.Value = obfuscateIntFloat(float64(integer_value))
@@ -245,9 +257,9 @@ func obfuscateIntFloat(real_value float64) string {
 	divider := int(math.Pow(float64(10), float64(decimal_places)))
 
 	if (divider > 1) {
-		result_string = "(math.Round((" + result_string + ")*" +  strconv.Itoa(divider) + ")/" + strconv.Itoa(divider) + ")"
+		result_string = "(int(math.Round((" + result_string + "))*" +  strconv.Itoa(divider) + ")/" + strconv.Itoa(divider) + ")"
 	} else {
-		result_string = "(math.Round(" + result_string + "))"
+		result_string = "(int(math.Round(" + result_string + ")))"
 
 	}
 
@@ -284,6 +296,33 @@ func obfuscateFunctionName(real_value string) string {
 		names_dictionary[real_value] = string(result)
 	}
 	return names_dictionary[real_value]
+}
+
+func obfuscateString(real_value string) string {
+	byte_array := []byte(real_value)
+	result_string := "" 
+	i := 0
+
+	if (len(byte_array) != len(real_value)) {
+		// TODO Add support for multiple-byte encodings
+		return real_value
+	}
+
+	for _, b := range byte_array {
+        // Convert byte to int
+        int_value := int(b)
+
+		result_string = result_string + "string(" + strconv.Itoa(int_value) + ")"
+		
+		if (i != len(byte_array)-1) {
+			result_string = result_string + "+"
+		}
+		
+		i = i + 1
+	}
+
+	result_string = "(" + result_string + ")"
+	return result_string
 }
 
 func isInArray(target string, arr []string) bool {
