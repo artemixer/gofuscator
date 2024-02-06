@@ -30,6 +30,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Add import if it doesn't exist
+	file = AddImportToFile(filePath, "math")
+
+
 	// Inspect the AST to find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
 		if ident, ok := n.(*ast.Ident); ok {
@@ -138,7 +142,6 @@ func obfuscateIntFloat(real_value float64) string {
 	var operations_array []string
 	
 	terms_amount := rand.Intn(3) + 3
-	debug(terms_amount)
 	
 	possible_operations_array := []string{"*", "/"}
 	possible_modifiers_array := []string{"Sqrt", "Sin", "Cos", "Log", "Tan"}
@@ -210,12 +213,14 @@ func obfuscateIntFloat(real_value float64) string {
 			target_num := float64(real_value) - total
 			target_log := math.Atan(target_num)
 
+			/*
 			fmt.Println("total:")
 			fmt.Println(total)
 			fmt.Println("real:")
 			fmt.Println(real_value)
 			fmt.Println("target:")
 			fmt.Println(target_num)
+			*/
 
 			operations_array[len(operations_array)-1] = "+"
 			terms_value_array[len(terms_value_array)-1] = target_num
@@ -226,9 +231,11 @@ func obfuscateIntFloat(real_value float64) string {
 		i = i + 1
 	}
 
+	/*
 	fmt.Println(terms_array)
 	fmt.Println(terms_value_array)
 	fmt.Println(operations_array)
+	*/
 	
 
 	// Append the arrays to form the output string
@@ -266,7 +273,7 @@ func obfuscateIntFloat(real_value float64) string {
 	}
 
 
-	fmt.Println(result_string)
+	//fmt.Println(result_string)
 	return result_string
 }
 
@@ -292,4 +299,64 @@ func obfuscateFunctionName(real_value string) string {
 		names_dictionary[real_value] = string(result)
 	}
 	return names_dictionary[real_value]
+}
+
+func hasImport(file *ast.File, importPath string) bool {
+	for _, imp := range file.Imports {
+		if imp.Path != nil && imp.Path.Value == fmt.Sprintf(`"%s"`, importPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func AddImportToFile(file string, import_str string) (*ast.File) {
+	// Create the AST by parsing src
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, file, nil, 0)
+	if err != nil {
+		return nil
+	}
+
+	// Import declaration.
+	// Source: https://golang.org/src/go/doc/example.go#L262
+	/*importDecl := &ast.GenDecl{
+		Tok:    token.IMPORT,
+		Lparen: 1, // Need non-zero Lparen and Rparen so that printer
+		Rparen: 1, // treats this as a factored import.
+	}*/
+
+	// Copy over the old imports
+	/*for _, s := range f.Imports {
+		iSpec := &ast.ImportSpec{Path: &ast.BasicLit{Value: s.Path.Value}}
+		importDecl.Specs = append(importDecl.Specs, iSpec)
+	}*/
+
+	// Add the new import
+	//iSpec := &ast.ImportSpec{Path: &ast.BasicLit{Value: strconv.Quote("ast")}}
+	//importDecl.Specs = append(importDecl.Specs, iSpec)
+
+	// Add the imports
+	for i := 0; i < len(f.Decls); i++ {
+		d := f.Decls[i]
+
+		switch d.(type) {
+		case *ast.FuncDecl:
+			// No action
+		case *ast.GenDecl:
+			dd := d.(*ast.GenDecl)
+
+			// IMPORT Declarations
+			if dd.Tok == token.IMPORT {
+				// Add the new import
+				iSpec := &ast.ImportSpec{Path: &ast.BasicLit{Value: strconv.Quote(import_str)}}
+				dd.Specs = append(dd.Specs, iSpec)
+			}
+		}
+	}
+
+	// Sort the imports
+	ast.SortImports(fset, f)
+
+	return f
 }
