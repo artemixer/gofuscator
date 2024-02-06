@@ -38,7 +38,7 @@ func main() {
 	ast.Inspect(file, func(n ast.Node) bool {
 		if ident, ok := n.(*ast.Ident); ok {
 			// Check if it is a variable (not a type, function, etc.)
-			if ident.Obj != nil && ident.Obj.Kind == ast.Var {
+			if ident.Obj != nil && ident.Obj.Kind == ast.Var && ident.Name != "_" {
 				//fmt.Println(ident.Name)
 				ident.Name = obfuscateVariableName(ident.Name)
 			}
@@ -59,7 +59,6 @@ func main() {
 			}
 		}
 	}
-	//fmt.Println(importPaths)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
@@ -94,6 +93,8 @@ func main() {
 		}
 		return true
 	})
+
+	debug(names_dictionary)
 
 	os.Remove("outfile.txt")
 	outputFile, err := os.Create("outfile.txt")
@@ -284,6 +285,9 @@ func obfuscateVariableName(real_value string) string {
 		for i := 0; i < 20; i++ {
 			result = append(result, unicode_chars[rand.Intn(len(unicode_chars))])
 		}
+		if valueExists(names_dictionary, string(result)) {
+			return obfuscateFunctionName(real_value)
+		}
 		names_dictionary[real_value] = string(result)
 	}
 	return names_dictionary[real_value]
@@ -295,6 +299,9 @@ func obfuscateFunctionName(real_value string) string {
 		var result []rune
 		for i := 0; i < 20; i++ {
 			result = append(result, unicode_chars[rand.Intn(len(unicode_chars))])
+		}
+		if valueExists(names_dictionary, string(result)) {
+			return obfuscateFunctionName(real_value)
 		}
 		names_dictionary[real_value] = string(result)
 	}
@@ -317,24 +324,6 @@ func AddImportToFile(file string, import_str string) (*ast.File) {
 	if err != nil {
 		return nil
 	}
-
-	// Import declaration.
-	// Source: https://golang.org/src/go/doc/example.go#L262
-	/*importDecl := &ast.GenDecl{
-		Tok:    token.IMPORT,
-		Lparen: 1, // Need non-zero Lparen and Rparen so that printer
-		Rparen: 1, // treats this as a factored import.
-	}*/
-
-	// Copy over the old imports
-	/*for _, s := range f.Imports {
-		iSpec := &ast.ImportSpec{Path: &ast.BasicLit{Value: s.Path.Value}}
-		importDecl.Specs = append(importDecl.Specs, iSpec)
-	}*/
-
-	// Add the new import
-	//iSpec := &ast.ImportSpec{Path: &ast.BasicLit{Value: strconv.Quote("ast")}}
-	//importDecl.Specs = append(importDecl.Specs, iSpec)
 
 	// Add the imports
 	for i := 0; i < len(f.Decls); i++ {
@@ -359,4 +348,13 @@ func AddImportToFile(file string, import_str string) (*ast.File) {
 	ast.SortImports(fset, f)
 
 	return f
+}
+
+func valueExists(dict map[string]string, value string) bool {
+    for _, v := range dict {
+        if v == value {
+            return true
+        }
+    }
+    return false
 }
