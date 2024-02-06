@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+var names_dictionary map[string]string = make(map[string]string)
+var unicode_chars = []rune("аa")
+
 func main() {
 
 
@@ -33,7 +36,7 @@ func main() {
 			// Check if it is a variable (not a type, function, etc.)
 			if ident.Obj != nil && ident.Obj.Kind == ast.Var {
 				//fmt.Println(ident.Name)
-				ident.Name = "amogus_var"
+				ident.Name = obfuscateVariableName(ident.Name)
 			}
 		}
 		return true
@@ -59,7 +62,7 @@ func main() {
 		case *ast.FuncDecl:
 			// Check if it is the old function name and declared in the current file
 			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == filePath {
-				node.Name.Name = "amogus_func"
+				node.Name.Name = obfuscateFunctionName(node.Name.Name)
 			}
 
 		case *ast.CallExpr:
@@ -67,7 +70,7 @@ func main() {
 			if ident, ok := node.Fun.(*ast.Ident); ok {
 				// Check if it is the old function name and declared in the current file
 				if ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == filePath {
-					ident.Name = "amogus_func"
+					ident.Name = obfuscateFunctionName(ident.Name)
 				}
 			}
 		case *ast.BasicLit:
@@ -77,11 +80,11 @@ func main() {
 			}
 			if node.Kind == token.INT {
 				integer_value, _ := strconv.Atoi(node.Value)
-				node.Value = obfuscateInteger(float64(integer_value))
+				node.Value = obfuscateIntFloat(float64(integer_value))
 			}
 			if node.Kind == token.FLOAT {
 				float_value, _ := strconv.ParseFloat(node.Value, 64)
-				node.Value = obfuscateInteger(float64(float_value))
+				node.Value = obfuscateIntFloat(float64(float_value))
 			}
 			
 		}
@@ -96,6 +99,7 @@ func main() {
 	}
 	defer outputFile.Close()
 
+	// Specify the encoding when writing to the file
 	err = printer.Fprint(outputFile, fset, file)
 	if err != nil {
 		fmt.Println("Error writing to output file:", err)
@@ -128,7 +132,7 @@ func debug(str interface{}) {
 	fmt.Println(str)
 }
 
-func obfuscateInteger(real_value float64) string {
+func obfuscateIntFloat(real_value float64) string {
 	var terms_array []string
 	var terms_value_array []float64
 	var operations_array []string
@@ -139,6 +143,7 @@ func obfuscateInteger(real_value float64) string {
 	possible_operations_array := []string{"*", "/"}
 	possible_modifiers_array := []string{"Sqrt", "Sin", "Cos", "Log", "Tan"}
 
+	// Generate random numbers and operations
 	i := 0
 	for {
 		i = i + 1
@@ -164,6 +169,7 @@ func obfuscateInteger(real_value float64) string {
 
 		rand.Seed(time.Now().UnixNano())
 
+		// If the term is not the last in the string, just select a random modifier for it
 		if (i+1 < terms_amount) {
 			modifier := possible_modifiers_array[rand.Intn(len(possible_modifiers_array))]
 			if (modifier == "Sqrt") {
@@ -184,6 +190,7 @@ func obfuscateInteger(real_value float64) string {
 			}
 
 		} else {
+			// If the term is last, find the value needed to bring the output to the real value
 			x := 0
 			total := terms_value_array[0]
 			for {
@@ -192,19 +199,10 @@ func obfuscateInteger(real_value float64) string {
 				}
 
 				if (operations_array[x] == "*") {
-					fmt.Println(total)
-					fmt.Println("*")
-					fmt.Println(terms_value_array[x+1])
 					total = total * terms_value_array[x+1]
 				} else if (operations_array[x] == "/") {
-					fmt.Println(total)
-					fmt.Println("/")
-					fmt.Println(terms_value_array[x+1])
 					total = total / terms_value_array[x+1]
 				}
-
-				fmt.Println(total)
-				fmt.Println()
 
 				x = x + 1
 			}
@@ -232,6 +230,8 @@ func obfuscateInteger(real_value float64) string {
 	fmt.Println(terms_value_array)
 	fmt.Println(operations_array)
 	
+
+	// Append the arrays to form the output string
 	result_string := ""
 	x := 0
 	for {
@@ -247,6 +247,7 @@ func obfuscateInteger(real_value float64) string {
 		x = x + 1
 	}
 
+	// Find the decimal places of the input and round the output to those decimal places
 	str := strconv.FormatFloat(real_value, 'f', -1, 64)
     parts := strings.Split(str, ".")
 	decimal_places := 0
@@ -255,7 +256,6 @@ func obfuscateInteger(real_value float64) string {
     } else {
         decimal_places = 0
     }
-
 	divider := int(math.Pow(float64(10), float64(decimal_places)))
 
 	if (divider > 1) {
@@ -268,4 +268,28 @@ func obfuscateInteger(real_value float64) string {
 
 	fmt.Println(result_string)
 	return result_string
+}
+
+func obfuscateVariableName(real_value string) string {
+	if _, exists := names_dictionary[real_value]; !exists {
+		rand.Seed(time.Now().UnixNano())
+		var result []rune
+		for i := 0; i < 20; i++ {
+			result = append(result, unicode_chars[rand.Intn(len(unicode_chars))])
+		}
+		names_dictionary[real_value] = string(result)
+	}
+	return names_dictionary[real_value]
+}
+
+func obfuscateFunctionName(real_value string) string {
+	if _, exists := names_dictionary[real_value]; !exists {
+		rand.Seed(time.Now().UnixNano())
+		var result []rune
+		for i := 0; i < 20; i++ {
+			result = append(result, unicode_chars[rand.Intn(len(unicode_chars))])
+		}
+		names_dictionary[real_value] = string(result)
+	}
+	return names_dictionary[real_value]
 }
