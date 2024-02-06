@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -13,19 +14,24 @@ import (
 	"math"
 	"time"
 )
+var input_file = flag.String("i", "", "the path to the input file")
+var output_file = flag.String("o", "", "the path to the output file")
 
 var names_dictionary map[string]string = make(map[string]string)
 var unicode_chars = []rune("аa")
-var outfile = "outfile.go"
 
 func main() {
-
-
-	filePath := "/var/sample_go_project/main.go"
+	flag.Parse()
+	if (len(*input_file) < 1) {
+		fmt.Println("Please provide an input file with '--i'")
+	}
+	if (len(*output_file) < 1) {
+		fmt.Println("Please provide an output file with '--i'")
+	}
 
 	// Parse the file
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	file, err := parser.ParseFile(fset, *input_file, nil, parser.ParseComments)
 	if err != nil {
 		fmt.Println("Error parsing file:", err)
 		os.Exit(1)
@@ -39,12 +45,12 @@ func main() {
 		return true
 	})
 
-	writeToOutputFile(outfile, file, fset)
+	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
-	file, err = parser.ParseFile(fset, outfile, nil, parser.ParseComments)
+	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
 
 	// Add "math" import if it doesn't exist
-	file = AddImportToFile(outfile, "math")
+	file = AddImportToFile(*output_file, "math")
 
 	// Find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -72,12 +78,20 @@ func main() {
 		}
 	}
 
+	ast.Inspect(file, func(n ast.Node) bool {
+		if ident, ok := n.(*ast.Ident); ok {
+			if ident.Obj == nil && (ident.Name == "true" || ident.Name == "false") {
+				ident.Name = obfuscateBool(ident.Name)
+			}
+		}
+		return true
+	})
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
 			// Check if it is the old function name and declared in the current file
-			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == outfile {
+			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == *output_file {
 				node.Name.Name = obfuscateFunctionName(node.Name.Name)
 			}
 
@@ -85,7 +99,7 @@ func main() {
 			// Check if it is a function call
 			if ident, ok := node.Fun.(*ast.Ident); ok {
 				// Check if it is the old function name and declared in the current file
-				if ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == outfile {
+				if ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file {
 					ident.Name = obfuscateFunctionName(ident.Name)
 				}
 			}
@@ -94,13 +108,14 @@ func main() {
 			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths){
 				node.Value = obfuscateString(node.Value)
 			}
+			
 		}
 		return true
 	})
 
-	writeToOutputFile(outfile, file, fset)
+	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
-	file, err = parser.ParseFile(fset, outfile, nil, parser.ParseComments)
+	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
@@ -121,7 +136,7 @@ func main() {
 
 	//debug(names_dictionary)
 
-	writeToOutputFile("outfile.go", file, fset)
+	writeToOutputFile(*output_file, file, fset)
 
 }
 
@@ -321,6 +336,33 @@ func obfuscateString(real_value string) string {
 		i = i + 1
 	}
 
+	result_string = "(" + result_string + ")"
+	return result_string
+}
+
+func obfuscateBool(real_value string) string {
+	rand.Seed(time.Now().UnixNano())
+	int1 := rand.Intn(10000)
+
+	rand.Seed(time.Now().UnixNano())
+	int2 := rand.Intn(10000)
+	operator := ""
+
+	if (real_value == "true") {
+		if (int1 > int2) {
+			operator = ">"
+		} else {
+			operator = "<="
+		}
+	} else {
+		if (int1 > int2) {
+			operator = "<"
+		} else {
+			operator = ">="
+		}
+	}
+	
+	result_string := strconv.Itoa(int1) + operator + strconv.Itoa(int2)
 	result_string = "(" + result_string + ")"
 	return result_string
 }
