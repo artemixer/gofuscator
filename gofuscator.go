@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"math"
 	"time"
+	"io/ioutil"
 )
 var input_file = flag.String("i", "", "the path to the input file")
 var output_file = flag.String("o", "", "the path to the output file")
@@ -45,6 +46,10 @@ func main() {
 		return true
 	})
 
+	writeToOutputFile(*output_file, file, fset)
+	fset = token.NewFileSet()
+	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
+
 	/*
 	file = addFunction(file, "test_func", 
 	`fmt.Println("Line 1 from the new function!")
@@ -55,7 +60,12 @@ func main() {
 	*/
 
 	// Add "math" import if it doesn't exist
-	file = addImport(file, fset, "math")
+	file, fset = addImport(file, fset, "math")
+
+
+	writeToOutputFile(*output_file, file, fset)
+	fset = token.NewFileSet()
+	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
 
 	// Find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -139,8 +149,45 @@ func main() {
 		return true
 	})
 
+	var imports_array []string
+	for _, decl := range file.Decls {
+        genDecl, ok := decl.(*ast.GenDecl)
+        if !ok || genDecl.Tok != token.IMPORT {
+            continue
+        }
+
+        for _, spec := range genDecl.Specs {
+            importSpec, ok := spec.(*ast.ImportSpec)
+            if !ok {
+                continue
+            }
+
+            importSpec.Name = &ast.Ident{Name: obfuscateFunctionName(strings.Trim(importSpec.Path.Value, "\""))}
+			imports_array = append(imports_array, strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/")[len(strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/"))-1])
+        }
+    }
 
 	writeToOutputFile(*output_file, file, fset)
+
+	// Read the file contents
+	content, err := ioutil.ReadFile(*output_file)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		os.Exit(1)
+	}
+	
+	modifiedContent := string(content)
+	for i := 0; i < len(imports_array); i++ {
+		modifiedContent = strings.ReplaceAll(modifiedContent, imports_array[i] + ".", obfuscateFunctionName(imports_array[i]) + ".")
+	}
+
+	// Write the modified content back to the file
+	err = ioutil.WriteFile(*output_file, []byte(modifiedContent), 0644)
+	if err != nil {
+		fmt.Println("Error writing to file:", err)
+		os.Exit(1)
+	}
+
 
 }
 
@@ -239,6 +286,7 @@ func obfuscateIntFloat(real_value float64) string {
 				target_num = total / real_value
 			}
 
+			/*
 			fmt.Println("total:")
 			fmt.Println(total)
 			fmt.Println("operator:")
@@ -249,6 +297,7 @@ func obfuscateIntFloat(real_value float64) string {
 			fmt.Println(target_num)
 			fmt.Println()
 			fmt.Println()
+			*/
 
 			//target_num := float64(real_value) - total
 			//target_log := math.Atan(target_num)
@@ -440,7 +489,7 @@ func hasImport(file *ast.File, importPath string) bool {
 	return false
 }
 
-func addImport(file *ast.File, fset *token.FileSet, import_str string) (*ast.File) {
+func addImport(file *ast.File, fset *token.FileSet, import_str string) (*ast.File, *token.FileSet) {
 	// Add the imports
 	for i := 0; i < len(file.Decls); i++ {
 		d := file.Decls[i]
@@ -463,7 +512,7 @@ func addImport(file *ast.File, fset *token.FileSet, import_str string) (*ast.Fil
 	// Sort the imports
 	ast.SortImports(fset, file)
 
-	return file
+	return file, fset
 }
 
 func valueExists(dict map[string]string, value string) bool {
@@ -550,4 +599,3 @@ func parseFieldList(fields []string, field_types []string) *ast.FieldList {
 	}
 	return &ast.FieldList{List: fields_parsed}
 }
-
