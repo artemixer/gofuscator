@@ -14,12 +14,20 @@ import (
 	"math"
 	"time"
 	"io/ioutil"
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
+	"encoding/hex"
 )
 var input_file = flag.String("i", "", "the path to the input file")
 var output_file = flag.String("o", "", "the path to the output file")
 
 var names_dictionary map[string]string = make(map[string]string)
 var unicode_chars = []rune("аa")
+
+var aes_key_obf string
+var iv_obf string
 
 // Workflow
 //	Replace 'const' with 'var'
@@ -47,6 +55,19 @@ func main() {
 	if (len(*output_file) < 1) {
 		fmt.Println("Please provide an output file with '--i'")
 	}
+
+	rand.Seed(time.Now().UnixNano())
+
+	aes_key_obf_byte := make([]byte, 16)
+	_, err := rand.Read(aes_key_obf_byte)
+	aes_key_obf = hex.EncodeToString(aes_key_obf_byte)
+
+	iv_obf_byte := make([]byte, 8)
+	_, err = rand.Read(iv_obf_byte)
+	iv_obf = hex.EncodeToString(iv_obf_byte)
+
+	debug(iv_obf)
+
 
 	// Parse the file
 	fset := token.NewFileSet()
@@ -129,6 +150,7 @@ func main() {
 
 
 
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
@@ -147,8 +169,14 @@ func main() {
 			}
 		case *ast.BasicLit:
 			// Check if it is a string literal
-			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths){
-				node.Value = obfuscateString(strings.Trim(node.Value, "\""))
+			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths) && (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf)) {
+				debug(node.Value)
+				debug(string(obfuscateFunctionName("aesDecrypt") + "(" + strings.Trim(node.Value, "\"") + ")"))
+				debug(string(obfuscateFunctionName("aesDecrypt") + "(" + aesEncrypt(strings.Trim(node.Value, "\""))  + ")"))
+				debug(string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\"")))  + ")"))
+				debug("")
+				node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\""))) + ")")
+				//node.Value = obfuscateString(strings.Trim(node.Value, "\""))
 			}
 			
 		}
@@ -677,8 +705,8 @@ func parseFieldList(fields []string, field_types []string) *ast.FieldList {
 
 func addAESFunctions(file *ast.File, fset *token.FileSet) (*ast.File, *token.FileSet) {
 
-	file = addGlobalVar(file, "aes_key_obf", "string", token.STRING, "\"my32digitkey12345678901234567890\"")
-	file = addGlobalVar(file, "iv_obf", "string", token.STRING, "\"my16digitIvKey12\"")
+	file = addGlobalVar(file, "aes_key_obf", "string", token.STRING, "\"" + string(aes_key_obf) + "\"")
+	file = addGlobalVar(file, "iv_obf", "string", token.STRING, "\"" + string(iv_obf) + "\"")
 
 	funcBody := ""
 	funcBody = `
@@ -693,28 +721,61 @@ func addAESFunctions(file *ast.File, fset *token.FileSet) (*ast.File, *token.Fil
 	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
 
 	if err != nil {
-		return "", err
+		return ""
 	}
 
 	block, err := aes.NewCipher([]byte(aes_key_obf))
 
 	if err != nil {
-		return "", err
+		return ""
 	}
 
 	if len(ciphertext)%aes.BlockSize != 0 {
-		return "", fmt.Errorf("block size cant be zero")
+		return ""
 	}
 
 	mode := cipher.NewCBCDecrypter(block, []byte(iv_obf))
 	mode.CryptBlocks(ciphertext, ciphertext)
 	ciphertext = PKCS5UnPadding(ciphertext)
 
-	return string(ciphertext), nil
+	return string(ciphertext)
 	`
-	file, fset = addFunction(file, fset, "aesDecrypt", funcBody, strings.Split("encrypted", " "), strings.Split("string", " "), strings.Split(" ", " "), strings.Split("string error", " "))
+	file, fset = addFunction(file, fset, "aesDecrypt", funcBody, strings.Split("encrypted", " "), strings.Split("string", " "), strings.Split("", " "), strings.Split("string", " "))
 	
 
 
 	return file, fset
+}
+
+func aesEncrypt(plaintext string) (string) {
+	if (plaintext == "") {
+		return `""`
+	}
+
+	var plainTextBlock []byte
+	length := len(plaintext)
+
+	if length%16 != 0 {
+		extendBlock := 16 - (length % 16)
+		plainTextBlock = make([]byte, length+extendBlock)
+		copy(plainTextBlock[length:], bytes.Repeat([]byte{uint8(extendBlock)}, extendBlock))
+	} else {
+		plainTextBlock = make([]byte, length)
+	}
+
+	copy(plainTextBlock, plaintext)
+	block, err := aes.NewCipher([]byte(aes_key_obf))
+
+	if err != nil {
+		debug(err)
+		return ""
+	}
+
+	ciphertext := make([]byte, len(plainTextBlock))
+	mode := cipher.NewCBCEncrypter(block, []byte(iv_obf))
+	mode.CryptBlocks(ciphertext, plainTextBlock)
+
+	str := base64.StdEncoding.EncodeToString(ciphertext)
+
+	return str
 }
