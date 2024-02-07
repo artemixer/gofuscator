@@ -75,15 +75,22 @@ func main() {
 	fmt.Println("Line 3 from the new function!")`, strings.Split("input_str", " "), strings.Split("string", " "), strings.Split("output_int", " "), strings.Split("int", " "))
 
 	file = addGlobalVar(file, "test_key", "\"3n84f38yedj\"")
+	os.Exit(1)
 	*/
 
-	// Add "math" import if it doesn't exist
-	file, fset = addImport(file, fset, "math")
+	// Adding AES functions
+	file, fset = addAESFunctions(file, fset)
 
+	// Add imports if it doesn't exist
+	file, fset = addImport(file, fset, "math")
+	file, fset = addImport(file, fset, "crypto/aes")
+	file, fset = addImport(file, fset, "crypto/cipher")
+	file, fset = addImport(file, fset, "encoding/base64")
 
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
 	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
+	//os.Exit(1)
 
 	// Find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -120,6 +127,8 @@ func main() {
 		return true
 	})
 
+
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
@@ -132,7 +141,7 @@ func main() {
 			// Check if it is a function call
 			if ident, ok := node.Fun.(*ast.Ident); ok {
 				// Check if it is the old function name and declared in the current file
-				if ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file {
+				if (ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file) || (ident.Name == "PKCS5UnPadding") {
 					ident.Name = obfuscateFunctionName(ident.Name)
 				}
 			}
@@ -145,6 +154,7 @@ func main() {
 		}
 		return true
 	})
+	
 
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
@@ -180,7 +190,7 @@ func main() {
                 continue
             }
 
-            importSpec.Name = &ast.Ident{Name: obfuscateFunctionName(strings.Trim(importSpec.Path.Value, "\""))}
+            importSpec.Name = &ast.Ident{Name: obfuscateFunctionName(strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/")[len(strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/"))-1])}
 			imports_array = append(imports_array, strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/")[len(strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/"))-1])
         }
     }
@@ -323,24 +333,25 @@ func obfuscateIntFloat(real_value float64) string {
 			//target_log := math.Atan(target_num)
 
 			modifier := possible_reversible_modifiers_array[rand.Intn(len(possible_reversible_modifiers_array))]
+			var exponent int
 			var target_modified_num float64
 			for {
 				if (modifier == "Tan") {
-					target_modified_num := math.Atan(target_num)
+					target_modified_num = math.Atan(target_num)
 					terms_value_array[i] = target_num
 					terms_array[i] = "math.Tan(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
 				} else if (modifier == "Frexp") {
-					target_modified_num, exponent := math.Frexp(target_num)
+					target_modified_num, exponent = math.Frexp(target_num)
 					terms_value_array[i] = target_num
 					terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(2, float64(" + strconv.Itoa(exponent) + ")))"
 				} else if (modifier == "Cbrt") {
-					target_modified_num := math.Pow(target_num, 3)
+					target_modified_num = math.Pow(target_num, 3)
 					terms_value_array[i] = target_num
 					terms_array[i] = "math.Cbrt(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
-				} 
+				} 	
 
 				// Checking for infinity overflows
-				if math.IsInf(target_modified_num, 1) || math.IsInf(target_modified_num, -1) {
+				if strings.Contains(strconv.FormatFloat(target_modified_num, 'f', -1, 64), "Inf") {
 					modifier = "Tan"
 					continue
 				} else {
@@ -437,6 +448,10 @@ func obfuscateString(real_value string) string {
 	byte_array := []byte(real_value)
 	result_string := "" 
 	i := 0
+
+	if (real_value == "") {
+		return `""`
+	}
 
 	if (len(byte_array) != len(real_value)) {
 		// TODO Add support for multiple-byte encodings
@@ -571,49 +586,78 @@ func writeToOutputFile(file string, contents *ast.File, fset *token.FileSet) {
 	}
 }
 
-func addFunction(file *ast.File, function_name string, function_content string, inputs []string, input_types []string, outputs []string, output_types []string) *ast.File {
+func addFunction(file *ast.File, fset *token.FileSet, function_name string, function_content string, inputs []string, input_types []string, outputs []string, output_types []string) (*ast.File, *token.FileSet) {
 	
 	inputs_parsed := parseFieldList(inputs, input_types)
 	outputs_parsed := parseFieldList(outputs, output_types)
 
+	// The function body as a string.
+	funcBody := `
+	package main
+
+	import (
+			"fmt"
+	)
+
+	func myfunc() {
+	` + function_content + `
+	}
+	`
+
+	// Parse the function body string into an AST.
+	body, err := parser.ParseFile(fset, "", funcBody, parser.ParseComments)
+	if err != nil {
+		fmt.Println("Error parsing function body:", err)
+	}
+
+	// Extract the body from the parsed AST.
+	var funcBodyStmts []ast.Stmt
+	for _, decl := range body.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			if fn.Body != nil {
+				funcBodyStmts = fn.Body.List
+			}
+		}
+	}
+
+	// Create the AST nodes representing the new function.
 	newFunc := &ast.FuncDecl{
 		Name: ast.NewIdent(function_name),
 		Type: &ast.FuncType{
 			Params:  inputs_parsed,
 			Results: outputs_parsed,
 		},
-		Body: &ast.BlockStmt{},
-	}
-
-	// Insert lines of code into the body of the new function
-	lines := strings.Split(function_content, "\n")
-	for _, line := range lines {
-		stmt, err := parser.ParseExpr(line)
-		if err != nil {
-			fmt.Println("Error parsing line:", err)
-			continue
-		}
-		newFunc.Body.List = append(newFunc.Body.List, &ast.ExprStmt{X: stmt})
-	}
-
-	// Add the new function to the file's declarations
-	file.Decls = append(file.Decls, newFunc)
-	return file
-}
-
-func addGlobalVar(file *ast.File, var_name string, var_content string) *ast.File {
-	newVar := &ast.GenDecl{
-		Tok: token.VAR,
-		Specs: []ast.Spec{
-			&ast.ValueSpec{
-				Names:  []*ast.Ident{ast.NewIdent(var_name)},
-				Values: []ast.Expr{ast.NewIdent(var_content)},
-			},
+		Body: &ast.BlockStmt{
+			List: funcBodyStmts,
 		},
 	}
 
-	// Insert the new variable declaration at the beginning of the file's declarations
-	file.Decls = append([]ast.Decl{newVar}, file.Decls...)
+	// Add the new function declaration to the end of the file.
+	file.Decls = append(file.Decls, newFunc)
+	return file, fset
+}
+
+func addGlobalVar(file *ast.File, var_name string, var_type string, var_type_token token.Token, var_content string) *ast.File {
+	globalVar := &ast.GenDecl{
+        Tok: token.VAR,
+        Specs: []ast.Spec{
+            &ast.ValueSpec{
+                Names: []*ast.Ident{
+                    ast.NewIdent(var_name),
+                },
+                Type: ast.NewIdent(var_type), // Type of the variable
+                Values: []ast.Expr{
+                    &ast.BasicLit{
+                        Kind:  var_type_token,
+                        Value: var_content, // Initial value of the variable
+                    },
+                },
+            },
+        },
+    }
+
+    // Add the new global variable declaration to the AST
+    file.Decls = append(file.Decls, globalVar)
 
 	return file
 }
@@ -629,4 +673,48 @@ func parseFieldList(fields []string, field_types []string) *ast.FieldList {
 		i = i + 1
 	}
 	return &ast.FieldList{List: fields_parsed}
+}
+
+func addAESFunctions(file *ast.File, fset *token.FileSet) (*ast.File, *token.FileSet) {
+
+	file = addGlobalVar(file, "aes_key_obf", "string", token.STRING, "\"my32digitkey12345678901234567890\"")
+	file = addGlobalVar(file, "iv_obf", "string", token.STRING, "\"my16digitIvKey12\"")
+
+	funcBody := ""
+	funcBody = `
+	length := len(src)
+	unpadding := int(src[length-1])
+
+	return src[:(length - unpadding)]
+	`
+	file, fset = addFunction(file, fset, "PKCS5UnPadding", funcBody, strings.Split("src", " "), strings.Split("[]byte", " "), strings.Split("", " "), strings.Split("[]byte", " "))
+
+	funcBody = `
+	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
+
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher([]byte(aes_key_obf))
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(ciphertext)%aes.BlockSize != 0 {
+		return "", fmt.Errorf("block size cant be zero")
+	}
+
+	mode := cipher.NewCBCDecrypter(block, []byte(iv_obf))
+	mode.CryptBlocks(ciphertext, ciphertext)
+	ciphertext = PKCS5UnPadding(ciphertext)
+
+	return string(ciphertext), nil
+	`
+	file, fset = addFunction(file, fset, "aesDecrypt", funcBody, strings.Split("encrypted", " "), strings.Split("string", " "), strings.Split(" ", " "), strings.Split("string error", " "))
+	
+
+
+	return file, fset
 }
