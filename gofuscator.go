@@ -104,6 +104,7 @@ func main() {
 
 	// Add imports if it doesn't exist
 	file, fset = addImport(file, fset, "math")
+	file, fset = addImport(file, fset, "reflect")
 	file, fset = addImport(file, fset, "crypto/aes")
 	file, fset = addImport(file, fset, "crypto/cipher")
 	file, fset = addImport(file, fset, "encoding/base64")
@@ -168,9 +169,12 @@ func main() {
 			}
 		case *ast.BasicLit:
 			// Check if it is a string literal
-			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths) && (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf)) {
-				node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\""))) + ")")
-				//node.Value = obfuscateString(strings.Trim(node.Value, "\""))
+			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths) {
+				if (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf)) {
+					node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\""))) + ")")
+				} else {
+					node.Value = obfuscateString(strings.Trim(node.Value, "\""))
+				}
 			}
 			
 		}
@@ -260,9 +264,11 @@ func main() {
 	for i := 0; i < len(operations_str); i++ {
 		real_operation := strings.ReplaceAll(operations_str[i].(string), `math`, obfuscateFunctionName("math"))
 		modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + "(", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "](")
+		modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + ")", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "])")
 	}
 
 	modifiedContent = strings.ReplaceAll(modifiedContent, `math.`, obfuscateFunctionName("math") + ".")
+	modifiedContent = strings.ReplaceAll(modifiedContent, `reflect.`, obfuscateFunctionName("reflect") + ".")
 
 	// Write the modified content back to the file
 	err = ioutil.WriteFile(*output_file, []byte(modifiedContent), 0644)
@@ -315,34 +321,43 @@ func obfuscateIntFloat(real_value float64) string {
 		rand.Seed(time.Now().UnixNano())
 
 		// If the term is not the last in the string, just select a random modifier for it
+		// TODO Add randomisation between reflect and normal
 		if (i+1 < terms_amount) {
 			modifier := possible_modifiers_array[rand.Intn(len(possible_modifiers_array))]
 			if (modifier == "Sqrt") {
 				terms_value_array[i] = math.Sqrt(terms_value_array[i])
-				terms_array[i] = "math.Sqrt(" + terms_array[i] + ")"
+				//terms_array[i] = "math.Sqrt(" + terms_array[i] + ")"
+				terms_array[i] = "reflect.ValueOf(math.Sqrt).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Sin") {	
 				terms_value_array[i] = math.Sin(terms_value_array[i])
-				terms_array[i] = "math.Sin(" + terms_array[i] + ")"
+				//terms_array[i] = "math.Sin(" + terms_array[i] + ")"
+				terms_array[i] = "reflect.ValueOf(math.Sin).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Cos") {
 				terms_value_array[i] = math.Cos(terms_value_array[i])
-				terms_array[i] = "math.Cos(" + terms_array[i] + ")"
+				//terms_array[i] = "math.Cos(" + terms_array[i] + ")"
+				terms_array[i] = "reflect.ValueOf(math.Cos).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Log") {
 				terms_value_array[i] = math.Log(terms_value_array[i])
-				terms_array[i] = "math.Log(" + terms_array[i] + ")"
+				//terms_array[i] = "math.Log(" + terms_array[i] + ")"
+				terms_array[i] = "reflect.ValueOf(math.Log).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Tan") {
 				terms_value_array[i] = math.Tan(terms_value_array[i])
-				terms_array[i] = "math.Tan(" + terms_array[i] + ")"
+				//terms_array[i] = "math.Tan(" + terms_array[i] + ")"
+				terms_array[i] = "reflect.ValueOf(math.Tan).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
+			} else if (modifier == "Cbrt") {
+				terms_value_array[i] = math.Cbrt(terms_value_array[i])
+				//terms_array[i] = "math.Cbrt(" + terms_array[i] + ")"
+				terms_array[i] = "reflect.ValueOf(math.Cbrt).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Frexp") {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
 				terms_value_array[i] = terms_value_array[i]*math.Pow(2, float64(exponent))
-				terms_array[i] = "(" +terms_array[i] + "*math.Pow(2, float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ")))"
+				//terms_array[i] = "(" +terms_array[i] + "*math.Pow(2, float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ")))"
+				terms_array[i] = "(" +terms_array[i] + "*reflect.ValueOf(math.Pow).Call([]reflect.Value{reflect.ValueOf(float64(2)), reflect.ValueOf(float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ") )})[0].Interface().(float64))"
 			} else if (modifier == "Hypot") {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
 				terms_value_array[i] = math.Hypot(terms_value_array[i], exponent)
-				terms_array[i] = "math.Hypot(" + terms_array[i] + ", " + strconv.FormatFloat(exponent, 'f', -1, 64) + ")"
-			} else if (modifier == "Cbrt") {
-				terms_value_array[i] = math.Cbrt(terms_value_array[i])
-				terms_array[i] = "math.Cbrt(" + terms_array[i] + ")"
+				//terms_array[i] = "math.Hypot(" + terms_array[i] + ", " + strconv.FormatFloat(exponent, 'f', -1, 64) + ")"
+				terms_array[i] = "(reflect.ValueOf(math.Hypot).Call([]reflect.Value{reflect.ValueOf(float64(" + terms_array[i] + ")), reflect.ValueOf(float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ") )})[0].Interface().(float64))"
 			}
 
 		} else {
@@ -624,6 +639,8 @@ func valueExists(dict map[string]string, value string) bool {
     }
     return false
 }
+
+
 
 func writeToOutputFile(file string, contents *ast.File, fset *token.FileSet) {
 	os.Remove(file)
