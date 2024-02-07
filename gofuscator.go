@@ -150,8 +150,8 @@ func obfuscateIntFloat(real_value float64) string {
 	terms_amount := rand.Intn(3) + 3
 	
 	possible_operations_array := []string{"*", "/"}
-	possible_modifiers_array := []string{"Sqrt", "Sin", "Cos", "Log", "Tan", "Frexp", "Hypot"}
-	possible_reversible_modifiers_array := []string{"Tan", "Frexp"}
+	possible_modifiers_array := []string{"Sqrt", "Sin", "Cos", "Log", "Tan", "Frexp", "Hypot", "Cbrt"}
+	possible_reversible_modifiers_array := []string{"Tan", "Frexp", "Cbrt"}
 
 	// Generate random numbers and operations
 	i := 0
@@ -205,6 +205,9 @@ func obfuscateIntFloat(real_value float64) string {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
 				terms_value_array[i] = math.Hypot(terms_value_array[i], exponent)
 				terms_array[i] = "math.Hypot(" + terms_array[i] + ", " + strconv.FormatFloat(exponent, 'f', -1, 64) + ")"
+			} else if (modifier == "Cbrt") {
+				terms_value_array[i] = math.Cbrt(terms_value_array[i])
+				terms_array[i] = "math.Cbrt(" + terms_array[i] + ")"
 			}
 
 		} else {
@@ -255,6 +258,10 @@ func obfuscateIntFloat(real_value float64) string {
 				target_modified_num, exponent := math.Frexp(target_num)
 				terms_value_array[i] = target_num
 				terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(2, float64(" + strconv.Itoa(exponent) + ")))"
+			} else if (modifier == "Cbrt") {
+				target_modified_num := math.Pow(target_num, 3)
+				terms_value_array[i] = target_num
+				terms_array[i] = "math.Cbrt(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
 			} 
 
 			//operations_array[len(operations_array)-1] = "+"
