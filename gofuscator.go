@@ -21,6 +21,24 @@ var output_file = flag.String("o", "", "the path to the output file")
 var names_dictionary map[string]string = make(map[string]string)
 var unicode_chars = []rune("аa")
 
+// Workflow
+//	Replace 'const' with 'var'
+//	Write and read
+//	Add import 'math'
+//	Write and read
+// 	Obfuscate variable names
+// 	Get imports list
+// 	Obfuscate bools
+// 	Obfuscate function decls
+// 	Obfuscate function calls
+// 	Obfuscate strings
+//	Write and read
+// 	Obfuscate ints
+// 	Obfuscate floats
+// 	Obfuscate import aliases
+//	Write and read
+//	Replace import refferences
+
 func main() {
 	flag.Parse()
 	if (len(*input_file) < 1) {
@@ -187,6 +205,7 @@ func main() {
 		fmt.Println("Error writing to file:", err)
 		os.Exit(1)
 	}
+	
 
 
 }
@@ -298,6 +317,7 @@ func obfuscateIntFloat(real_value float64) string {
 			fmt.Println()
 			fmt.Println()
 			*/
+			
 
 			//target_num := float64(real_value) - total
 			//target_log := math.Atan(target_num)
@@ -361,7 +381,7 @@ func obfuscateIntFloat(real_value float64) string {
 	divider := int(math.Pow(float64(10), float64(decimal_places)))
 
 	if (divider > 1) {
-		result_string = "(int(math.Round((" + result_string + "))*" +  strconv.Itoa(divider) + ")/" + strconv.Itoa(divider) + ")"
+		result_string = "((math.Round((" + result_string + "*" +  strconv.Itoa(divider) + ")))/" + strconv.Itoa(divider) + ")"
 	} else {
 		result_string = "(int(math.Round(" + result_string + ")))"
 
