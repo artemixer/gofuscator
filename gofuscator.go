@@ -54,12 +54,8 @@ func main() {
 	file = addGlobalVar(file, "test_key", "\"3n84f38yedj\"")
 	*/
 
-	writeToOutputFile(*output_file, file, fset)
-	fset = token.NewFileSet()
-	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
-
 	// Add "math" import if it doesn't exist
-	file = AddImportToFile(*output_file, "math")
+	file = addImport(file, fset, "math")
 
 	// Find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -444,17 +440,10 @@ func hasImport(file *ast.File, importPath string) bool {
 	return false
 }
 
-func AddImportToFile(file string, import_str string) (*ast.File) {
-	// Create the AST by parsing src
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		return nil
-	}
-
+func addImport(file *ast.File, fset *token.FileSet, import_str string) (*ast.File) {
 	// Add the imports
-	for i := 0; i < len(f.Decls); i++ {
-		d := f.Decls[i]
+	for i := 0; i < len(file.Decls); i++ {
+		d := file.Decls[i]
 
 		switch d.(type) {
 		case *ast.FuncDecl:
@@ -472,9 +461,9 @@ func AddImportToFile(file string, import_str string) (*ast.File) {
 	}
 
 	// Sort the imports
-	ast.SortImports(fset, f)
+	ast.SortImports(fset, file)
 
-	return f
+	return file
 }
 
 func valueExists(dict map[string]string, value string) bool {
