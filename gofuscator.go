@@ -106,7 +106,7 @@ func main() {
 		case *ast.BasicLit:
 			// Check if it is a string literal
 			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths){
-				node.Value = obfuscateString(node.Value)
+				node.Value = obfuscateString(strings.Trim(node.Value, "\""))
 			}
 			
 		}
@@ -151,6 +151,7 @@ func obfuscateIntFloat(real_value float64) string {
 	
 	possible_operations_array := []string{"*", "/"}
 	possible_modifiers_array := []string{"Sqrt", "Sin", "Cos", "Log", "Tan", "Frexp", "Hypot"}
+	possible_reversible_modifiers_array := []string{"Tan", "Frexp"}
 
 	// Generate random numbers and operations
 	i := 0
@@ -224,21 +225,41 @@ func obfuscateIntFloat(real_value float64) string {
 				x = x + 1
 			}
 
-			target_num := float64(real_value) - total
-			target_log := math.Atan(target_num)
+			target_num := 0.0
+			if (operations_array[len(operations_array)-1] == "*") {
+				target_num = real_value / total
+			} else if (operations_array[len(operations_array)-1] == "/") {
+				target_num = total / real_value
+			}
 
-			/*
 			fmt.Println("total:")
 			fmt.Println(total)
+			fmt.Println("operator:")
+			fmt.Println(operations_array[len(operations_array)-1])
 			fmt.Println("real:")
 			fmt.Println(real_value)
 			fmt.Println("target:")
 			fmt.Println(target_num)
-			*/
+			fmt.Println()
+			fmt.Println()
 
-			operations_array[len(operations_array)-1] = "+"
-			terms_value_array[len(terms_value_array)-1] = target_num
-			terms_array[len(terms_array)-1] = "math.Tan(" + strconv.FormatFloat(target_log, 'f', -1, 64) + ")"
+			//target_num := float64(real_value) - total
+			//target_log := math.Atan(target_num)
+
+			modifier := possible_reversible_modifiers_array[rand.Intn(len(possible_reversible_modifiers_array))]
+			if (modifier == "Tan") {
+				target_modified_num := math.Atan(target_num)
+				terms_value_array[i] = target_num
+				terms_array[i] = "math.Tan(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
+			} else if (modifier == "Frexp") {
+				target_modified_num, exponent := math.Frexp(target_num)
+				terms_value_array[i] = target_num
+				terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(2, float64(" + strconv.Itoa(exponent) + ")))"
+			} 
+
+			//operations_array[len(operations_array)-1] = "+"
+			//terms_value_array[len(terms_value_array)-1] = target_num
+			//terms_array[len(terms_array)-1] = "math.Tan(" + strconv.FormatFloat(target_log, 'f', -1, 64) + ")"
 			
 		}
 
