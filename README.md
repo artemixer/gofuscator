@@ -40,13 +40,7 @@ And all of the above methods are reinforced by the way integers and floats are o
 Integers and floats are converted into a random sequence of mathematical operations, such as ```math.Sqrt```, ```math.Tan``` and others.
 The corresponding math functions are called using ```reflect``` to avoid optimisations at compile-time. And finally, all relevant math functions
 are called through a randomly generated function array. This is the result: 
-<br/><br/>```-3``` -> ```-(int(aaaaаaаaaaaааaааааaа.Round(aааaaaaаaааaaаааaaаа.ValueOf(aаaаaaaaаaaаaааaааaa```<br/>```
-[(int(aaaaаaаaaaaааaааааaа.Round( aааaaaaаaааaaаааaaаа.ValueOf(aaaaаaаaaaaааaааааaа.Cos).Call([]aааaaaaаaааaaаааaaаа```<br/>```
-.Value{aааaaaaаaааaaаааaaаа.ValueOf(5.415309898908408)})[0].Interface().(float64)/(0.6464489776185214```<br/>```
-*aaaaаaаaaaaааaааааaа.Pow(2,float64(-2))))))]) .Call([]aааaaaaаaааaaаааaaаа.Value{aааaaaaаaааaaаааaaаа.ValueOf```<br/>```
-(5.8042675186492145)})[0].Interface().(float64) / aаaаaaaaаaaаaааaааaa[(int(aaaaаaаaaaaааaааааaа.Round(```<br/>```
-aааaaaaаaааaaаааaaаа.ValueOf(aaaaаaаaaaaааaааааaа.Sqrt) .Call([]aааaaaaаaааaaаааaaаа.Value{aааaaaaаaааaaаааaaаа```<br/>```
-.ValueOf(7.908218581580884)})[0].Interface().(float64)*aaaaаaаaaaaааaааааaа.Tan(0))))](0.6766090278466431))))```
+<br/><br/>```-3``` -> ```-(int(aaaaаaаaaaaааaааааaа.Round(aааaaaaаaааaaаааaaаа.ValueOf(aаaаaaaaаaaаaааaааaa[(int( aaaaаaаaaaaааaааааaа.Round(aааaaaaаaааaaаааaaаа.ValueOf(aaaaаaаaaaaааaааааaа.Cos).Call([]aааaaaaаaааaaаааaaаа.Value{aааaaaaаaааaaаааaaаа.ValueOf(5.415309898908408)})[0].Interface().(float64)/(0.6464489776185214*aaaaаaаaaaaааaааааaа.Pow(2, float64(-2))))))]).Call([]aааaaaaаaааaaаааaaаа.Value{aааaaaaаaааaaаааaaаа.ValueOf(5.8042675186492145)})[0].Interface().(float64)/aаaаaaaaаaaаaааaааaa[(int(aaaaаaаaaaaааaааааaа.Round(aааaaaaаaааaaаааaaаа.ValueOf(aaaaаaаaaaaааaааааaа.Sqrt).Call([]aааaaaaаaааaaаааaaаа.Value{aааaaaaаaааaaаааaaаа.ValueOf(7.908218581580884)})[0].Interface().(float64)*aaaaаaаaaaaааaааааaа.Tan(0))))](0.6766090278466431))))```
 
 This processing also applies to integers generated at all previous steps.
 
