@@ -45,6 +45,15 @@ func main() {
 		return true
 	})
 
+	/*
+	file = addFunction(file, "test_func", 
+	`fmt.Println("Line 1 from the new function!")
+	fmt.Println("Line 2 from the new function!")
+	fmt.Println("Line 3 from the new function!")`, strings.Split("input_str", " "), strings.Split("string", " "), strings.Split("output_int", " "), strings.Split("int", " "))
+
+	file = addGlobalVar(file, "test_key", "\"3n84f38yedj\"")
+	*/
+
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
 	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
@@ -134,7 +143,6 @@ func main() {
 		return true
 	})
 
-	//debug(names_dictionary)
 
 	writeToOutputFile(*output_file, file, fset)
 
@@ -493,3 +501,64 @@ func writeToOutputFile(file string, contents *ast.File, fset *token.FileSet) {
 		os.Exit(1)
 	}
 }
+
+func addFunction(file *ast.File, function_name string, function_content string, inputs []string, input_types []string, outputs []string, output_types []string) *ast.File {
+	
+	inputs_parsed := parseFieldList(inputs, input_types)
+	outputs_parsed := parseFieldList(outputs, output_types)
+
+	newFunc := &ast.FuncDecl{
+		Name: ast.NewIdent(function_name),
+		Type: &ast.FuncType{
+			Params:  inputs_parsed,
+			Results: outputs_parsed,
+		},
+		Body: &ast.BlockStmt{},
+	}
+
+	// Insert lines of code into the body of the new function
+	lines := strings.Split(function_content, "\n")
+	for _, line := range lines {
+		stmt, err := parser.ParseExpr(line)
+		if err != nil {
+			fmt.Println("Error parsing line:", err)
+			continue
+		}
+		newFunc.Body.List = append(newFunc.Body.List, &ast.ExprStmt{X: stmt})
+	}
+
+	// Add the new function to the file's declarations
+	file.Decls = append(file.Decls, newFunc)
+	return file
+}
+
+func addGlobalVar(file *ast.File, var_name string, var_content string) *ast.File {
+	newVar := &ast.GenDecl{
+		Tok: token.VAR,
+		Specs: []ast.Spec{
+			&ast.ValueSpec{
+				Names:  []*ast.Ident{ast.NewIdent(var_name)},
+				Values: []ast.Expr{ast.NewIdent(var_content)},
+			},
+		},
+	}
+
+	// Insert the new variable declaration at the beginning of the file's declarations
+	file.Decls = append([]ast.Decl{newVar}, file.Decls...)
+
+	return file
+}
+
+func parseFieldList(fields []string, field_types []string) *ast.FieldList {
+	fields_parsed := []*ast.Field{}
+	i := 0
+	for _, name := range fields {
+		fields_parsed = append(fields_parsed, &ast.Field{
+			Names: []*ast.Ident{ast.NewIdent(name)},
+			Type:  ast.NewIdent(field_types[i]),
+		})
+		i = i + 1
+	}
+	return &ast.FieldList{List: fields_parsed}
+}
+
