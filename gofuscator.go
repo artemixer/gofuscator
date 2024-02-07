@@ -45,6 +45,8 @@ var iv_obf string
 // 	Obfuscate floats
 // 	Obfuscate import aliases
 //	Write and read
+//	Add math operations array
+//	Replace referrences to math operations
 //	Replace import refferences
 
 func main() {
@@ -66,12 +68,10 @@ func main() {
 	_, err = rand.Read(iv_obf_byte)
 	iv_obf = hex.EncodeToString(iv_obf_byte)
 
-	debug(iv_obf)
-
 
 	// Parse the file
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, *input_file, nil, parser.ParseComments)
+	file, err := parser.ParseFile(fset, *input_file, nil, 0)
 	if err != nil {
 		fmt.Println("Error parsing file:", err)
 		os.Exit(1)
@@ -111,7 +111,6 @@ func main() {
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
 	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
-	//os.Exit(1)
 
 	// Find variable names
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -170,11 +169,6 @@ func main() {
 		case *ast.BasicLit:
 			// Check if it is a string literal
 			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths) && (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf)) {
-				debug(node.Value)
-				debug(string(obfuscateFunctionName("aesDecrypt") + "(" + strings.Trim(node.Value, "\"") + ")"))
-				debug(string(obfuscateFunctionName("aesDecrypt") + "(" + aesEncrypt(strings.Trim(node.Value, "\""))  + ")"))
-				debug(string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\"")))  + ")"))
-				debug("")
 				node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\""))) + ")")
 				//node.Value = obfuscateString(strings.Trim(node.Value, "\""))
 			}
@@ -224,6 +218,13 @@ func main() {
     }
 
 	writeToOutputFile(*output_file, file, fset)
+	fset = token.NewFileSet()
+	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
+
+	// Adding math operation array
+	file = addGlobalVar(file, obfuscateVariableName("operations_array_obf"), "string", token.STRING, "operations_array_here")
+
+	writeToOutputFile(*output_file, file, fset)
 
 	// Read the file contents
 	content, err := ioutil.ReadFile(*output_file)
@@ -236,6 +237,32 @@ func main() {
 	for i := 0; i < len(imports_array); i++ {
 		modifiedContent = strings.ReplaceAll(modifiedContent, imports_array[i] + ".", obfuscateFunctionName(imports_array[i]) + ".")
 	}
+
+	operations_str := []interface{}{
+		"math.Sqrt",
+		"math.Sin", 
+		"math.Cos", 
+		"math.Log", 
+		"math.Tan",
+		"math.Cbrt", 
+	}
+	operations_str = shuffle(operations_str)
+
+	operations_array_str := "[]func(x float64)(float64){"
+	for i := 0; i < len(operations_str); i++ {
+		operations_array_str = operations_array_str + operations_str[i].(string) + ","
+	}
+	operations_array_str = operations_array_str + "}"
+	operations_array_str = strings.ReplaceAll(operations_array_str, `math`, obfuscateFunctionName("math"))
+
+	modifiedContent = strings.ReplaceAll(modifiedContent, `string = operations_array_here`, `= ` + operations_array_str)
+	
+	for i := 0; i < len(operations_str); i++ {
+		real_operation := strings.ReplaceAll(operations_str[i].(string), `math`, obfuscateFunctionName("math"))
+		modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + "(", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "](")
+	}
+
+	modifiedContent = strings.ReplaceAll(modifiedContent, `math.`, obfuscateFunctionName("math") + ".")
 
 	// Write the modified content back to the file
 	err = ioutil.WriteFile(*output_file, []byte(modifiedContent), 0644)
@@ -712,32 +739,16 @@ func addAESFunctions(file *ast.File, fset *token.FileSet) (*ast.File, *token.Fil
 	funcBody = `
 	length := len(src)
 	unpadding := int(src[length-1])
-
 	return src[:(length - unpadding)]
 	`
 	file, fset = addFunction(file, fset, "PKCS5UnPadding", funcBody, strings.Split("src", " "), strings.Split("[]byte", " "), strings.Split("", " "), strings.Split("[]byte", " "))
 
 	funcBody = `
-	ciphertext, err := base64.StdEncoding.DecodeString(encrypted)
-
-	if err != nil {
-		return ""
-	}
-
-	block, err := aes.NewCipher([]byte(aes_key_obf))
-
-	if err != nil {
-		return ""
-	}
-
-	if len(ciphertext)%aes.BlockSize != 0 {
-		return ""
-	}
-
+	ciphertext, _ := base64.StdEncoding.DecodeString(encrypted)
+	block, _ := aes.NewCipher([]byte(aes_key_obf))
 	mode := cipher.NewCBCDecrypter(block, []byte(iv_obf))
 	mode.CryptBlocks(ciphertext, ciphertext)
 	ciphertext = PKCS5UnPadding(ciphertext)
-
 	return string(ciphertext)
 	`
 	file, fset = addFunction(file, fset, "aesDecrypt", funcBody, strings.Split("encrypted", " "), strings.Split("string", " "), strings.Split("", " "), strings.Split("string", " "))
@@ -778,4 +789,18 @@ func aesEncrypt(plaintext string) (string) {
 	str := base64.StdEncoding.EncodeToString(ciphertext)
 
 	return str
+}
+
+func shuffle(arr []interface{}) []interface{} {
+    // Make a copy of the slice to avoid modifying the original
+    shuffled := make([]interface{}, len(arr))
+    copy(shuffled, arr)
+
+    // Shuffle the elements
+    for i := len(shuffled) - 1; i > 0; i-- {
+        j := rand.Intn(i + 1)
+        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    }
+
+    return shuffled
 }
