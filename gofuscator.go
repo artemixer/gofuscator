@@ -22,6 +22,14 @@ import (
 )
 var input_file = flag.String("i", "", "the path to the input file")
 var output_file = flag.String("o", "", "the path to the output file")
+var ignore_ints_bool = flag.Bool("no-ints", false, "disables int/float obfuscation")
+var ignore_strings_obfuscation_bool = flag.Bool("no-strings-obf", false, "disables string obfuscation")
+var ignore_strings_encryption_bool = flag.Bool("no-strings-enc", false, "disables string encryption")
+var ignore_vars_bool = flag.Bool("no-vars", false, "disables variable name obfuscation")
+var ignore_functions_bool = flag.Bool("no-functions", false, "disables function name/call obfuscation")
+var ignore_bools_bool = flag.Bool("no-bools", false, "disables bool obfuscation")
+var ignore_imports_bool = flag.Bool("no-imports", false, "disables import obfuscation")
+
 
 var names_dictionary map[string]string = make(map[string]string)
 var unicode_chars = []rune("аa")
@@ -100,14 +108,17 @@ func main() {
 	*/
 
 	// Adding AES functions
-	file, fset = addAESFunctions(file, fset)
+	if (!*ignore_strings_encryption_bool) { 
+		file, fset = addAESFunctions(file, fset)
+		file, fset = addImport(file, fset, "crypto/aes")
+		file, fset = addImport(file, fset, "crypto/cipher")
+		file, fset = addImport(file, fset, "encoding/base64")
+	}
 
-	// Add imports if it doesn't exist
-	file, fset = addImport(file, fset, "math")
-	file, fset = addImport(file, fset, "reflect")
-	file, fset = addImport(file, fset, "crypto/aes")
-	file, fset = addImport(file, fset, "crypto/cipher")
-	file, fset = addImport(file, fset, "encoding/base64")
+	if (!*ignore_ints_bool) { 
+		file, fset = addImport(file, fset, "math") 
+		file, fset = addImport(file, fset, "reflect") 
+	}
 
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
@@ -117,7 +128,7 @@ func main() {
 	ast.Inspect(file, func(n ast.Node) bool {
 		if ident, ok := n.(*ast.Ident); ok {
 			// Check if it is a variable (not a type, function, etc.)
-			if ident.Obj != nil && (ident.Obj.Kind == ast.Var) && ident.Name != "_" {
+			if ident.Obj != nil && (ident.Obj.Kind == ast.Var) && ident.Name != "_" && !*ignore_vars_bool {
 				ident.Name = obfuscateVariableName(ident.Name)
 			}
 		}
@@ -141,7 +152,7 @@ func main() {
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		if ident, ok := n.(*ast.Ident); ok {
-			if ident.Obj == nil && (ident.Name == "true" || ident.Name == "false") {
+			if ident.Obj == nil && (ident.Name == "true" || ident.Name == "false") && !*ignore_bools_bool {
 				ident.Name = obfuscateBool(ident.Name)
 			}
 		}
@@ -149,13 +160,11 @@ func main() {
 	})
 
 
-
-
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
 			// Check if it is the old function name and declared in the current file
-			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == *output_file {
+			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == *output_file && !*ignore_functions_bool {
 				node.Name.Name = obfuscateFunctionName(node.Name.Name)
 			}
 
@@ -163,14 +172,14 @@ func main() {
 			// Check if it is a function call
 			if ident, ok := node.Fun.(*ast.Ident); ok {
 				// Check if it is the old function name and declared in the current file
-				if (ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file) || (ident.Name == "PKCS5UnPadding") {
+				if ((ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file) || (ident.Name == "PKCS5UnPadding")) && !*ignore_functions_bool {
 					ident.Name = obfuscateFunctionName(ident.Name)
 				}
 			}
 		case *ast.BasicLit:
 			// Check if it is a string literal
 			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths) {
-				if (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf)) {
+				if (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf) && !*ignore_strings_encryption_bool) {
 					node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\""))) + ")")
 				} else {
 					node.Value = obfuscateString(strings.Trim(node.Value, "\""))
@@ -180,7 +189,7 @@ func main() {
 		}
 		return true
 	})
-	
+
 
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
@@ -206,7 +215,7 @@ func main() {
 	var imports_array []string
 	for _, decl := range file.Decls {
         genDecl, ok := decl.(*ast.GenDecl)
-        if !ok || genDecl.Tok != token.IMPORT {
+        if !ok || genDecl.Tok != token.IMPORT || *ignore_imports_bool {
             continue
         }
 
@@ -220,13 +229,16 @@ func main() {
 			imports_array = append(imports_array, strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/")[len(strings.Split(strings.Trim(importSpec.Path.Value, "\""), "/"))-1])
         }
     }
+	
 
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
 	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
 
 	// Adding math operation array
-	file = addGlobalVar(file, obfuscateVariableName("operations_array_obf"), "string", token.STRING, "operations_array_here")
+	if (!*ignore_ints_bool) {
+		file = addGlobalVar(file, obfuscateVariableName("operations_array_obf"), "string", token.STRING, "operations_array_here")
+	}
 
 	writeToOutputFile(*output_file, file, fset)
 
@@ -252,23 +264,34 @@ func main() {
 	}
 	operations_str = shuffle(operations_str)
 
-	operations_array_str := "[]func(x float64)(float64){"
-	for i := 0; i < len(operations_str); i++ {
-		operations_array_str = operations_array_str + operations_str[i].(string) + ","
-	}
-	operations_array_str = operations_array_str + "}"
-	operations_array_str = strings.ReplaceAll(operations_array_str, `math`, obfuscateFunctionName("math"))
+	if (!*ignore_ints_bool) {
+		operations_array_str := "[]func(x float64)(float64){"
+		for i := 0; i < len(operations_str); i++ {
+			operations_array_str = operations_array_str + operations_str[i].(string) + ","
+		}
+		operations_array_str = operations_array_str + "}"
+		if (!*ignore_imports_bool) {
+			operations_array_str = strings.ReplaceAll(operations_array_str, `math`, obfuscateFunctionName("math"))
+		}
 
-	modifiedContent = strings.ReplaceAll(modifiedContent, `string = operations_array_here`, `= ` + operations_array_str)
-	
-	for i := 0; i < len(operations_str); i++ {
-		real_operation := strings.ReplaceAll(operations_str[i].(string), `math`, obfuscateFunctionName("math"))
-		modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + "(", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "](")
-		modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + ")", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "])")
-	}
+		modifiedContent = strings.ReplaceAll(modifiedContent, `string = operations_array_here`, `= ` + operations_array_str)
+		
+		for i := 0; i < len(operations_str); i++ {
+			real_operation := ""
+			if (!*ignore_imports_bool) {
+				real_operation = strings.ReplaceAll(operations_str[i].(string), `math`, obfuscateFunctionName("math"))
+			} else {
+				real_operation = operations_str[i].(string)
+			}
+			modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + "(", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "](")
+			modifiedContent = strings.ReplaceAll(modifiedContent, real_operation + ")", obfuscateVariableName("operations_array_obf") + "[" + obfuscateIntFloat(float64(i)) + "])")
+		}
 
-	modifiedContent = strings.ReplaceAll(modifiedContent, `math.`, obfuscateFunctionName("math") + ".")
-	modifiedContent = strings.ReplaceAll(modifiedContent, `reflect.`, obfuscateFunctionName("reflect") + ".")
+		if (!*ignore_imports_bool) {
+			modifiedContent = strings.ReplaceAll(modifiedContent, `math.`, obfuscateFunctionName("math") + ".")
+			modifiedContent = strings.ReplaceAll(modifiedContent, `reflect.`, obfuscateFunctionName("reflect") + ".")
+		}
+	}
 
 	// Write the modified content back to the file
 	err = ioutil.WriteFile(*output_file, []byte(modifiedContent), 0644)
@@ -284,11 +307,15 @@ func main() {
 
 
 func obfuscateIntFloat(real_value float64) string {
+	if (*ignore_ints_bool) {
+		return strconv.FormatFloat(real_value, 'f', -1, 64)
+	}
+
 	var terms_array []string
 	var terms_value_array []float64
 	var operations_array []string
 	
-	terms_amount := rand.Intn(3) + 3
+	terms_amount := rand.Intn(1) + 2
 	
 	possible_operations_array := []string{"*", "/"}
 	possible_modifiers_array := []string{"Sqrt", "Sin", "Cos", "Log", "Tan", "Frexp", "Hypot", "Cbrt"}
@@ -485,6 +512,10 @@ func obfuscateIntFloat(real_value float64) string {
 }
 
 func obfuscateVariableName(real_value string) string {
+	if (*ignore_vars_bool) {
+		return real_value
+	}
+
 	if _, exists := names_dictionary[real_value]; !exists {
 		rand.Seed(time.Now().UnixNano())
 		var result []rune
@@ -500,6 +531,10 @@ func obfuscateVariableName(real_value string) string {
 }
 
 func obfuscateFunctionName(real_value string) string {
+	if (*ignore_functions_bool) {
+		return real_value
+	}
+
 	if _, exists := names_dictionary[real_value]; !exists {
 		rand.Seed(time.Now().UnixNano())
 		var result []rune
@@ -515,6 +550,10 @@ func obfuscateFunctionName(real_value string) string {
 }
 
 func obfuscateString(real_value string) string {
+	if (*ignore_strings_obfuscation_bool) {
+		return `"` + real_value + `"`
+	}
+
 	byte_array := []byte(real_value)
 	result_string := "" 
 	i := 0
@@ -546,6 +585,10 @@ func obfuscateString(real_value string) string {
 }
 
 func obfuscateBool(real_value string) string {
+	if (*ignore_bools_bool) {
+		return real_value
+	}
+
 	rand.Seed(time.Now().UnixNano())
 	int1 := rand.Intn(10000)
 
