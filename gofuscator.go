@@ -323,19 +323,30 @@ func obfuscateIntFloat(real_value float64) string {
 			//target_log := math.Atan(target_num)
 
 			modifier := possible_reversible_modifiers_array[rand.Intn(len(possible_reversible_modifiers_array))]
-			if (modifier == "Tan") {
-				target_modified_num := math.Atan(target_num)
-				terms_value_array[i] = target_num
-				terms_array[i] = "math.Tan(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
-			} else if (modifier == "Frexp") {
-				target_modified_num, exponent := math.Frexp(target_num)
-				terms_value_array[i] = target_num
-				terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(2, float64(" + strconv.Itoa(exponent) + ")))"
-			} else if (modifier == "Cbrt") {
-				target_modified_num := math.Pow(target_num, 3)
-				terms_value_array[i] = target_num
-				terms_array[i] = "math.Cbrt(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
-			} 
+			var target_modified_num float64
+			for {
+				if (modifier == "Tan") {
+					target_modified_num := math.Atan(target_num)
+					terms_value_array[i] = target_num
+					terms_array[i] = "math.Tan(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
+				} else if (modifier == "Frexp") {
+					target_modified_num, exponent := math.Frexp(target_num)
+					terms_value_array[i] = target_num
+					terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(2, float64(" + strconv.Itoa(exponent) + ")))"
+				} else if (modifier == "Cbrt") {
+					target_modified_num := math.Pow(target_num, 3)
+					terms_value_array[i] = target_num
+					terms_array[i] = "math.Cbrt(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + ")"
+				} 
+
+				// Checking for infinity overflows
+				if math.IsInf(target_modified_num, 1) || math.IsInf(target_modified_num, -1) {
+					modifier = "Tan"
+					continue
+				} else {
+					break
+				}
+			}
 
 			//operations_array[len(operations_array)-1] = "+"
 			//terms_value_array[len(terms_value_array)-1] = target_num
