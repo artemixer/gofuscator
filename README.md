@@ -16,11 +16,13 @@ go build gofuscator.go
 ```
 Here is a sample before and after the obfuscation process:
 
-<img width="922" alt="Screenshot 2024-02-06 at 22 52 28" src="https://github.com/artemixer/gofuscator/assets/109953672/3e45c7a4-fb37-42c1-9bf2-433f1af9d26c">
+<img width="922" alt="Screenshot 2024-02-07 at 14 13 28" src="https://github.com/artemixer/gofuscator/assets/109953672/8e36ebbc-fc2c-4211-8835-96aca05e7696">
+
 <br/>
 <br/>
 
-<img width="921" alt="Screenshot 2024-02-06 at 22 52 40" src="https://github.com/artemixer/gofuscator/assets/109953672/8458afc2-fc29-45de-b590-7b3a665e3f96">
+<img width="923" alt="Screenshot 2024-02-07 at 14 13 44" src="https://github.com/artemixer/gofuscator/assets/109953672/dafcc981-47a7-450c-8dce-1325a83b15a6">
+
 
 ## Notes
 As ```const``` types cannot have values set by functions, they are converted to ```var``` upon processing.
