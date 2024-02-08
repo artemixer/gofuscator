@@ -178,11 +178,11 @@ func main() {
 			}
 		case *ast.BasicLit:
 			// Check if it is a string literal
-			if node.Kind == token.STRING && !isInArray(strings.Trim(node.Value, "\""), importPaths) {
-				if (strings.Trim(node.Value, "\"") != aes_key_obf && strings.Trim(node.Value, "\"") != string(iv_obf) && !*ignore_strings_encryption_bool) {
-					node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(strings.Trim(node.Value, "\""))) + ")")
+			if node.Kind == token.STRING && !isInArray(trimFirstLastChars(node.Value), importPaths) {
+				if (trimFirstLastChars(node.Value) != aes_key_obf && trimFirstLastChars(node.Value) != string(iv_obf) && !*ignore_strings_encryption_bool) {
+					node.Value = string(obfuscateFunctionName("aesDecrypt") + "(" + obfuscateString(aesEncrypt(trimFirstLastChars(node.Value))) + ")")
 				} else {
-					node.Value = obfuscateString(strings.Trim(node.Value, "\""))
+					node.Value = obfuscateString(trimFirstLastChars(node.Value))
 				}
 			}
 			
@@ -554,6 +554,7 @@ func obfuscateString(real_value string) string {
 		return `"` + real_value + `"`
 	}
 
+	real_value, _ = strconv.Unquote(`"` + real_value + `"`)
 	byte_array := []byte(real_value)
 	result_string := "" 
 	i := 0
@@ -863,4 +864,14 @@ func shuffle(arr []interface{}) []interface{} {
     }
 
     return shuffled
+}
+
+func trimFirstLastChars(input string) string {
+    if len(input) <= 2 {
+        return input
+    }
+
+    trimmedString := input[1 : len(input)-1]
+
+    return trimmedString
 }
