@@ -19,6 +19,7 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/hex"
+	"unicode"
 )
 var input_file = flag.String("i", "", "the path to the input file")
 var output_file = flag.String("o", "", "the path to the output file")
@@ -28,6 +29,7 @@ var ignore_strings_encryption_bool = flag.Bool("no-strings-enc", false, "disable
 var ignore_vars_bool = flag.Bool("no-vars", false, "disables variable name obfuscation")
 var ignore_functions_bool = flag.Bool("no-functions", false, "disables function name/call obfuscation")
 var ignore_bools_bool = flag.Bool("no-bools", false, "disables bool obfuscation")
+var ignore_hexes_bool = flag.Bool("no-hexes", false, "disables hex value obfuscation")
 var ignore_imports_bool = flag.Bool("no-imports", false, "disables import obfuscation")
 
 
@@ -200,12 +202,17 @@ func main() {
 
 		case *ast.BasicLit:
 			if node.Kind == token.INT {
-				integer_value, _ := strconv.Atoi(node.Value)
-				node.Value = obfuscateIntFloat(float64(integer_value))
+				if (containsNonNumericChars(node.Value)) {
+					node.Value = obfuscateHex(node.Value)
+				} else {
+					integer_value, _ := strconv.Atoi(node.Value)
+					node.Value = obfuscateIntFloat(float64(integer_value))
+				}
 			}
 			if node.Kind == token.FLOAT {
 				float_value, _ := strconv.ParseFloat(node.Value, 64)
 				node.Value = obfuscateIntFloat(float64(float_value))
+				//debug(node.Value)
 			}
 			
 		}
@@ -616,6 +623,34 @@ func obfuscateBool(real_value string) string {
 	return result_string
 }
 
+func obfuscateHex(real_value string) string {
+	if (*ignore_hexes_bool) {
+		return real_value
+	}
+
+	if strings.HasPrefix(real_value, "0x") {
+		real_value = real_value[2:]
+	}
+
+    byteArray, err := hex.DecodeString(real_value)
+    if err != nil {
+        fmt.Println("Error decoding hex:", err)
+		return real_value
+    }
+
+	result_string := "("
+	for i := 0; i < len(byteArray); i++ {
+		if (i+1 < len(byteArray)) {
+			result_string = result_string + ","
+		}
+        byte_int := int(byteArray[i])
+		result_string = result_string + "byte(" + obfuscateIntFloat(float64(byte_int)) + ")"
+    }
+	result_string = result_string + ")"
+	
+	return result_string
+}
+
 func isInArray(target string, arr []string) bool {
 	for _, item := range arr {
 		if item == target {
@@ -824,6 +859,8 @@ func aesEncrypt(plaintext string) (string) {
 		return `""`
 	}
 
+	plaintext, _ = strconv.Unquote(`"` + plaintext + `"`)
+
 	var plainTextBlock []byte
 	length := len(plaintext)
 
@@ -868,10 +905,19 @@ func shuffle(arr []interface{}) []interface{} {
 
 func trimFirstLastChars(input string) string {
     if len(input) <= 2 {
-        return input
+        return ""
     }
 
     trimmedString := input[1 : len(input)-1]
 
     return trimmedString
+}
+
+func containsNonNumericChars(str string) bool {
+    for _, char := range str {
+        if !unicode.IsDigit(char) {
+            return true
+        }
+    }
+    return false
 }
