@@ -24,7 +24,7 @@ Here is a sample before and after the obfuscation process:
 <img width="876" alt="Screenshot 2024-02-07 at 23 57 23 1" src="https://github.com/artemixer/gofuscator/assets/109953672/375e08c6-087a-4cd9-ade4-b3e53fc249fc">
 
 ## Functionality
-Currently gofuscator is able to process **strings, integers, floats, bools, imports and function/variable names**
+Currently gofuscator is able to process **strings, integers, floats, bools, hex values, imports and function/variable names**
 
 Function and variable names, as well as imports, are changed to a random string consisting of the ASCII ```a``` and the cyrilic ```а```, which end up looking visually identical: 
 <br/>```str1``` -> ```аaааааaaaaаaaaaaааaa```
@@ -35,6 +35,9 @@ Bools are changed to a random lesser or greater statement:
 
 Strings are decrypted from a base64 sequence of bytes : 
 <br/>```"test"``` -> ```aesDecrypt((string(49) + string(78) + string(57) + ...)```
+
+Hexes are changed into a string of corresponding bytes :
+<br/>```0x48, 0x65``` -> ```(byte(72)), (byte(101))```
 
 And all of the above methods are reinforced by the way integers and floats are obfuscated, which is the main feature of this tool.
 Integers and floats are converted into a random sequence of mathematical operations, such as ```math.Sqrt```, ```math.Tan``` and others.
@@ -47,6 +50,9 @@ This processing also applies to integers generated at all previous steps.
 
 ## Notes
 As ```const``` types cannot have values set by functions, they are converted to ```var``` upon processing.
+<br/>
+<br/>
+If you are using non-default numeric variable types, make sure to explicitly declare them when passing to functions (ex. ```uint8(5)```), as the parser has no way of knowing the real variable type and assumes ```int```/```float64```
 
 
 <br/>
