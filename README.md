@@ -36,7 +36,7 @@ Bools are changed to a random lesser or greater statement:
 Strings are decrypted from a base64 sequence of bytes : 
 <br/>```"test"``` -> ```aesDecrypt((string(49) + string(78) + string(57) + ...)```
 
-Hexes are changed into a string of corresponding bytes :
+Hexes are changed into declarations of corresponding bytes :
 <br/>```0x48, 0x65``` -> ```(byte(72)), (byte(101))```
 
 And all of the above methods are reinforced by the way integers and floats are obfuscated, which is the main feature of this tool.
