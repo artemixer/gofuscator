@@ -835,6 +835,9 @@ func addAESFunctions(file *ast.File, fset *token.FileSet) (*ast.File, *token.Fil
 	funcBody = `
 	length := len(src)
 	unpadding := int(src[length-1])
+	if (unpadding < 2 || int(src[length-2]) != unpadding) {
+		return src
+	}
 	return src[:(length - unpadding)]
 	`
 	file, fset = addFunction(file, fset, "PKCS5UnPadding", funcBody, strings.Split("src", " "), strings.Split("[]byte", " "), strings.Split("", " "), strings.Split("[]byte", " "))
