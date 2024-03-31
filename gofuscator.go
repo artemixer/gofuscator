@@ -161,12 +161,13 @@ func main() {
 		return true
 	})
 
-
+	var functions_list []string
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
 			// Check if it is the old function name and declared in the current file
 			if node.Name.Name != "main" && node.Recv == nil && node.Name.Obj != nil && node.Name.Obj.Pos().IsValid() && fset.Position(node.Name.Obj.Pos()).Filename == *output_file && !*ignore_functions_bool {
+				functions_list = append(functions_list, node.Name.Name)
 				node.Name.Name = obfuscateFunctionName(node.Name.Name)
 			}
 
@@ -174,7 +175,7 @@ func main() {
 			// Check if it is a function call
 			if ident, ok := node.Fun.(*ast.Ident); ok {
 				// Check if it is the old function name and declared in the current file
-				if ((ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file) || (ident.Name == "PKCS5UnPadding")) && !*ignore_functions_bool {
+				if ((ident.Name != "main" && ident.Obj != nil && ident.Obj.Pos().IsValid() && fset.Position(ident.Obj.Pos()).Filename == *output_file) || isInArray(ident.Name, functions_list)) && !*ignore_functions_bool {
 					ident.Name = obfuscateFunctionName(ident.Name)
 				}
 			}
@@ -191,6 +192,8 @@ func main() {
 		}
 		return true
 	})
+
+	debug(functions_list)
 
 
 	writeToOutputFile(*output_file, file, fset)
@@ -360,42 +363,33 @@ func obfuscateIntFloat(real_value float64) string {
 			modifier := possible_modifiers_array[rand.Intn(len(possible_modifiers_array))]
 			if (modifier == "Sqrt") {
 				terms_value_array[i] = math.Sqrt(terms_value_array[i])
-				//terms_array[i] = "math.Sqrt(" + terms_array[i] + ")"
 				terms_array[i] = "reflect.ValueOf(math.Sqrt).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Sin") {	
 				terms_value_array[i] = math.Sin(terms_value_array[i])
-				//terms_array[i] = "math.Sin(" + terms_array[i] + ")"
 				terms_array[i] = "reflect.ValueOf(math.Sin).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Cos") {
 				terms_value_array[i] = math.Cos(terms_value_array[i])
-				//terms_array[i] = "math.Cos(" + terms_array[i] + ")"
 				terms_array[i] = "reflect.ValueOf(math.Cos).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Log") {
 				terms_value_array[i] = math.Log(terms_value_array[i])
-				//terms_array[i] = "math.Log(" + terms_array[i] + ")"
 				terms_array[i] = "reflect.ValueOf(math.Log).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Tan") {
 				terms_value_array[i] = math.Tan(terms_value_array[i])
-				//terms_array[i] = "math.Tan(" + terms_array[i] + ")"
 				terms_array[i] = "reflect.ValueOf(math.Tan).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Cbrt") {
 				terms_value_array[i] = math.Cbrt(terms_value_array[i])
-				//terms_array[i] = "math.Cbrt(" + terms_array[i] + ")"
 				terms_array[i] = "reflect.ValueOf(math.Cbrt).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Frexp") {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
 				terms_value_array[i] = terms_value_array[i]*math.Pow(2, float64(exponent))
-				//terms_array[i] = "(" +terms_array[i] + "*math.Pow(2, float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ")))"
 				terms_array[i] = "(" +terms_array[i] + "*reflect.ValueOf(math.Pow).Call([]reflect.Value{reflect.ValueOf(float64(2)), reflect.ValueOf(float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ") )})[0].Interface().(float64))"
 			} else if (modifier == "Hypot") {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
 				terms_value_array[i] = math.Hypot(terms_value_array[i], exponent)
-				//terms_array[i] = "math.Hypot(" + terms_array[i] + ", " + strconv.FormatFloat(exponent, 'f', -1, 64) + ")"
 				terms_array[i] = "(reflect.ValueOf(math.Hypot).Call([]reflect.Value{reflect.ValueOf(float64(" + terms_array[i] + ")), reflect.ValueOf(float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ") )})[0].Interface().(float64))"
 			}
 
 		} else {
-			// If the term is last, find the value needed to bring the output to the real value
 			x := 0
 			total := terms_value_array[0]
 			for {
@@ -418,23 +412,6 @@ func obfuscateIntFloat(real_value float64) string {
 			} else if (operations_array[len(operations_array)-1] == "/") {
 				target_num = total / real_value
 			}
-
-			/*
-			fmt.Println("total:")
-			fmt.Println(total)
-			fmt.Println("operator:")
-			fmt.Println(operations_array[len(operations_array)-1])
-			fmt.Println("real:")
-			fmt.Println(real_value)
-			fmt.Println("target:")
-			fmt.Println(target_num)
-			fmt.Println()
-			fmt.Println()
-			*/
-			
-
-			//target_num := float64(real_value) - total
-			//target_log := math.Atan(target_num)
 
 			modifier := possible_reversible_modifiers_array[rand.Intn(len(possible_reversible_modifiers_array))]
 			var exponent int
@@ -835,9 +812,6 @@ func addAESFunctions(file *ast.File, fset *token.FileSet) (*ast.File, *token.Fil
 	funcBody = `
 	length := len(src)
 	unpadding := int(src[length-1])
-	if (unpadding < 2 || int(src[length-2]) != unpadding) {
-		return src
-	}
 	return src[:(length - unpadding)]
 	`
 	file, fset = addFunction(file, fset, "PKCS5UnPadding", funcBody, strings.Split("src", " "), strings.Split("[]byte", " "), strings.Split("", " "), strings.Split("[]byte", " "))
