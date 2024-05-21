@@ -20,9 +20,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"unicode"
+	"hash/fnv"
 )
 var input_file = flag.String("i", "", "the path to the input file")
 var output_file = flag.String("o", "", "the path to the output file")
+var seed = flag.String("seed", "", "seed to use for code generation")
+
 var ignore_ints_bool = flag.Bool("no-ints", false, "disables int/float obfuscation")
 var ignore_strings_obfuscation_bool = flag.Bool("no-strings-obf", false, "disables string obfuscation")
 var ignore_strings_encryption_bool = flag.Bool("no-strings-enc", false, "disables string encryption")
@@ -35,6 +38,7 @@ var ignore_imports_bool = flag.Bool("no-imports", false, "disables import obfusc
 
 var names_dictionary map[string]string = make(map[string]string)
 var unicode_chars = []rune("аa")
+var int_seed = int64(0)
 
 var aes_key_obf string
 var iv_obf string
@@ -68,7 +72,13 @@ func main() {
 		fmt.Println("Please provide an output file with '--i'")
 	}
 
-	rand.Seed(time.Now().UnixNano())
+	string_seed := *seed
+	if (len(string_seed) > 0) {
+		int_seed = int64(hashString(string_seed))
+	} else {
+		int_seed = time.Now().UnixNano()
+	}
+	rand.Seed(int_seed)
 
 	aes_key_obf_byte := make([]byte, 16)
 	_, err := rand.Read(aes_key_obf_byte)
@@ -98,16 +108,6 @@ func main() {
 	writeToOutputFile(*output_file, file, fset)
 	fset = token.NewFileSet()
 	file, err = parser.ParseFile(fset, *output_file, nil, parser.ParseComments)
-
-	/*
-	file = addFunction(file, "test_func", 
-	`fmt.Println("Line 1 from the new function!")
-	fmt.Println("Line 2 from the new function!")
-	fmt.Println("Line 3 from the new function!")`, strings.Split("input_str", " "), strings.Split("string", " "), strings.Split("output_int", " "), strings.Split("int", " "))
-
-	file = addGlobalVar(file, "test_key", "\"3n84f38yedj\"")
-	os.Exit(1)
-	*/
 
 	// Adding AES functions
 	if (!*ignore_strings_encryption_bool) { 
@@ -339,8 +339,6 @@ func obfuscateIntFloat(real_value float64) string {
 			break
 		}
 
-		rand.Seed(time.Now().UnixNano())
-
 		var value float64 = float64(rand.Intn(100000000000000000) + 1) / 10000000000000000
 		terms_value_array = append(terms_value_array, float64(value))
 		terms_array = append(terms_array, strconv.FormatFloat(value, 'f', -1, 64))
@@ -354,8 +352,6 @@ func obfuscateIntFloat(real_value float64) string {
 		if (i >= terms_amount) {
 			break
 		}
-
-		rand.Seed(time.Now().UnixNano())
 
 		// If the term is not the last in the string, just select a random modifier for it
 		// TODO Add randomisation between reflect and normal
@@ -501,12 +497,12 @@ func obfuscateVariableName(real_value string) string {
 	}
 
 	if _, exists := names_dictionary[real_value]; !exists {
-		rand.Seed(time.Now().UnixNano())
 		var result []rune
 		for i := 0; i < 20; i++ {
 			result = append(result, unicode_chars[rand.Intn(len(unicode_chars))])
 		}
 		if valueExists(names_dictionary, string(result)) {
+			debug("again")
 			return obfuscateFunctionName(real_value)
 		}
 		names_dictionary[real_value] = string(result)
@@ -520,7 +516,6 @@ func obfuscateFunctionName(real_value string) string {
 	}
 
 	if _, exists := names_dictionary[real_value]; !exists {
-		rand.Seed(time.Now().UnixNano())
 		var result []rune
 		for i := 0; i < 20; i++ {
 			result = append(result, unicode_chars[rand.Intn(len(unicode_chars))])
@@ -574,10 +569,8 @@ func obfuscateBool(real_value string) string {
 		return real_value
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	int1 := rand.Intn(10000)
 
-	rand.Seed(time.Now().UnixNano())
 	int2 := rand.Intn(10000)
 	operator := ""
 
@@ -897,4 +890,10 @@ func containsNonNumericChars(str string) bool {
         }
     }
     return false
+}
+
+func hashString(s string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return h.Sum64()
 }
