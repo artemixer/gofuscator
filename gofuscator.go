@@ -377,7 +377,7 @@ func obfuscateIntFloat(real_value float64) string {
 				terms_array[i] = "reflect.ValueOf(math.Cbrt).Call([]reflect.Value{reflect.ValueOf(" + terms_array[i] + ")})[0].Interface().(float64)"
 			} else if (modifier == "Frexp") {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
-				terms_value_array[i] = terms_value_array[i]*math.Pow(2, float64(exponent))
+				terms_value_array[i] = terms_value_array[i]*math.Pow(3, float64(exponent))
 				terms_array[i] = "(" +terms_array[i] + "*reflect.ValueOf(math.Pow).Call([]reflect.Value{reflect.ValueOf(float64(2)), reflect.ValueOf(float64(" + strconv.FormatFloat(exponent, 'f', -1, 64) + ") )})[0].Interface().(float64))"
 			} else if (modifier == "Hypot") {
 				exponent := float64((rand.Intn(100000000000000000) + 1) - 50000000000000000) / 10000000000000000
@@ -420,7 +420,7 @@ func obfuscateIntFloat(real_value float64) string {
 				} else if (modifier == "Frexp") {
 					target_modified_num, exponent = math.Frexp(target_num)
 					terms_value_array[i] = target_num
-					terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(2, float64(" + strconv.Itoa(exponent) + ")))"
+					terms_array[i] = "(" + strconv.FormatFloat(target_modified_num, 'f', -1, 64) + "*math.Pow(3, float64(" + strconv.Itoa(exponent) + ")))"
 				} else if (modifier == "Cbrt") {
 					target_modified_num = math.Pow(target_num, 3)
 					terms_value_array[i] = target_num
@@ -436,20 +436,10 @@ func obfuscateIntFloat(real_value float64) string {
 				}
 			}
 
-			//operations_array[len(operations_array)-1] = "+"
-			//terms_value_array[len(terms_value_array)-1] = target_num
-			//terms_array[len(terms_array)-1] = "math.Tan(" + strconv.FormatFloat(target_log, 'f', -1, 64) + ")"
-			
 		}
 
 		i = i + 1
 	}
-
-	/*
-	fmt.Println(terms_array)
-	fmt.Println(terms_value_array)
-	fmt.Println(operations_array)
-	*/
 	
 
 	// Append the arrays to form the output string
@@ -640,9 +630,13 @@ func removeChar(input string, charToRemove byte) string {
 	return result
 }
 
-func debug(str interface{}) {
-	fmt.Printf("[?] ")
-	fmt.Println(str)
+func debug(str interface{}, debug_level ...int) {
+	if (debug_level != 0) {
+		if (debug_level >= global_debug_level) {
+			fmt.Printf("[?] ")
+			fmt.Println(str)
+		}
+	}
 }
 
 func hasImport(file *ast.File, importPath string) bool {
