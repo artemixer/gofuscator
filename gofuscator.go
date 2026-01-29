@@ -42,6 +42,7 @@ var int_seed = int64(0)
 
 var aes_key_obf string
 var iv_obf string
+var global_debug_level = 0
 
 // Workflow
 //	Replace 'const' with 'var'
@@ -631,11 +632,14 @@ func removeChar(input string, charToRemove byte) string {
 }
 
 func debug(str interface{}, debug_level ...int) {
-	if (debug_level != 0) {
-		if (debug_level >= global_debug_level) {
+	if len(debug_level) > 0 {
+		if debug_level[0] >= global_debug_level {
 			fmt.Printf("[?] ")
 			fmt.Println(str)
 		}
+	} else {
+		fmt.Printf("[?] ")
+		fmt.Println(str)
 	}
 }
 
